@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model User {
+  id        String              @id @default(cuid())
+  email     String              @unique
+  password  String
+  name      String
+  role      Role                @default(USER)
+  configs   UserConfiguration[]
+  createdAt DateTime            @default(now())
+}
+
+model Car {
+  id        String              @id @default(cuid())
+  brand     String
+  model     String
+  year      Int
+  basePrice Float
+  imageUrl  String?
+  configs   UserConfiguration[]
+}
+
+model Category {
+  id            String         @id @default(cuid())
+  name          String
+  slug          String         @unique
+  modifications Modification[]
+}
+
+model Modification {
+  id          String   @id @default(cuid())
+  name        String
+  price       Float
+  description String?
+  imageUrl    String?
+  categoryId  String
+  category    Category @relation(fields: [categoryId], references: [id])
+}
+
+model UserConfiguration {
+  id            String   @id @default(cuid())
+  userId        String
+  carId         String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  car           Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  modifications Json
+  totalPrice    Float
+  createdAt     DateTime @default(now())
+}

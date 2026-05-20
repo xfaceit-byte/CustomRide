@@ -1,65 +1,158 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import Link from "next/link";
+import { motion } from "framer-motion";
+import { PageTransition } from "@/components/page-transition";
+
+const steps = [
+  {
+    icon: "🚗",
+    title: "Alege mașina",
+    description:
+      "Selectează din catalogul nostru modelul care ți se potrivește.",
+  },
+  {
+    icon: "✨",
+    title: "Personalizează",
+    description:
+      "Culori, jante, spoilere și accesorii — totul într-un singur loc.",
+  },
+  {
+    icon: "💾",
+    title: "Salvează configurația",
+    description:
+      "Păstrează build-ul tău în cont și revino oricând vrei.",
+  },
+];
+
+const testimonials = [
+  {
+    name: "Andrei M.",
+    text: "Am configurat Golf-ul meu în câteva minute. Interfața e superbă!",
+    rating: 5,
+  },
+  {
+    name: "Elena P.",
+    text: "Prețul total se actualizează instant. Foarte transparent.",
+    rating: 5,
+  },
+  {
+    name: "Mihai D.",
+    text: "Cea mai bună experiență de tuning online pe care am încercat-o.",
+    rating: 5,
+  },
+  {
+    name: "Ioana S.",
+    text: "Design modern, totul în română. Recomand cu încredere!",
+    rating: 5,
+  },
+];
+
+export default function HomePage() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <PageTransition>
+      <section className="hero-grain relative overflow-hidden border-b border-[#2a2a2a] bg-gradient-to-b from-[#111111] to-[#0a0a0a]">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(0,212,255,0.08),transparent_60%)]" />
+        <div className="relative mx-auto max-w-6xl px-4 py-24 sm:px-6 sm:py-32">
+          <motion.h1
+            className="max-w-3xl text-4xl font-bold leading-tight tracking-tight text-white sm:text-6xl"
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            Construiește mașina{" "}
+            <span className="bg-gradient-to-r from-[#00d4ff] to-[#0066ff] bg-clip-text text-transparent">
+              visurilor tale
+            </span>
+          </motion.h1>
+          <motion.p
+            className="mt-6 max-w-xl text-lg text-[#888888]"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+          >
+            Configuratorul premium pentru modificări auto. Alege modelul,
+            personalizează fiecare detaliu și vezi prețul în timp real.
+          </motion.p>
+          <motion.div
+            className="mt-10 flex flex-wrap gap-4"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+          >
+            <Link
+              href="/configurator"
+              className="rounded-lg bg-[#00d4ff] px-6 py-3 text-sm font-semibold text-[#0a0a0a] transition-all duration-300 hover:shadow-[0_0_28px_rgba(0,212,255,0.45)]"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+              Începe configurarea
+            </Link>
+            <Link
+              href="/#cum-functioneaza"
+              className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-6 py-3 text-sm font-medium text-white transition-all duration-300 hover:border-[#00d4ff]/40 card-hover"
             >
-              Learning
-            </a>{" "}
-            center.
+              Cum funcționează
+            </Link>
+          </motion.div>
+        </div>
+      </section>
+
+      <section
+        id="cum-functioneaza"
+        className="border-b border-[#2a2a2a] bg-[#111111] py-20"
+      >
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <h2 className="text-center text-3xl font-bold text-white">
+            Cum funcționează
+          </h2>
+          <p className="mx-auto mt-3 max-w-lg text-center text-[#888888]">
+            Trei pași simpli până la configurația perfectă
           </p>
+          <div className="mt-14 grid gap-8 md:grid-cols-3">
+            {steps.map((step, i) => (
+              <motion.div
+                key={step.title}
+                className="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-8 text-center card-hover"
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+              >
+                <span className="text-4xl">{step.icon}</span>
+                <h3 className="mt-4 text-lg font-semibold text-white">
+                  {step.title}
+                </h3>
+                <p className="mt-2 text-sm text-[#888888]">{step.description}</p>
+              </motion.div>
+            ))}
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </section>
+
+      <section className="py-20">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <h2 className="text-center text-3xl font-bold text-white">
+            Ce spun utilizatorii
+          </h2>
+          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {testimonials.map((t, i) => (
+              <motion.article
+                key={t.name}
+                className="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-6 card-hover"
+                initial={{ opacity: 0, scale: 0.96 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.08 }}
+              >
+                <p className="text-[#00d4ff]">
+                  {"★".repeat(t.rating)}
+                </p>
+                <p className="mt-3 text-sm text-[#888888]">&ldquo;{t.text}&rdquo;</p>
+                <p className="mt-4 text-sm font-medium text-white">{t.name}</p>
+              </motion.article>
+            ))}
+          </div>
         </div>
-      </main>
-    </div>
+      </section>
+    </PageTransition>
   );
 }
