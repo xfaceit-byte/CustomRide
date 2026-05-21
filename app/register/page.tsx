@@ -58,11 +58,13 @@ export default function RegisterPage() {
   return (
     <PageTransition>
       <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-8">
-          <h1 className="text-2xl font-bold text-white">Înregistrare</h1>
-          <p className="mt-2 text-sm text-[#888888]">
-            Creează un cont nou pe CustomRide
-          </p>
+        <div className="w-full max-w-md rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-6 sm:p-8">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-white">Înregistrare</h1>
+            <p className="mt-2 text-sm text-[#888888]">
+              Creează un cont nou pe CustomRide
+            </p>
+          </div>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-5">
             <div>

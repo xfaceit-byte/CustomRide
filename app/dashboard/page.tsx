@@ -2,7 +2,10 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { DashboardClient } from "@/components/dashboard/dashboard-client";
+import {
+  DashboardClient,
+  type DashboardConfig,
+} from "@/components/dashboard/dashboard-client";
 
 export const dynamic = "force-dynamic";
 
@@ -14,20 +17,18 @@ export default async function DashboardPage() {
 
   const configurations = await prisma.userConfiguration.findMany({
     where: { userId: session.user.id },
-    include: { car: true },
     orderBy: { createdAt: "desc" },
   });
 
-  const serialized = configurations.map((c) => ({
+  const serialized: DashboardConfig[] = configurations.map((c) => ({
     id: c.id,
     totalPrice: c.totalPrice,
     createdAt: c.createdAt.toISOString(),
-    modifications: c.modifications as {
-      id: string;
-      name: string;
-      price: number;
-    }[],
-    car: c.car,
+    modifications: (c.modifications as DashboardConfig["modifications"]) ?? [],
+    carBrand: c.carBrand,
+    carModel: c.carModel,
+    carYear: c.carYear,
+    carBasePrice: c.carBasePrice,
   }));
 
   return <DashboardClient initialConfigs={serialized} />;

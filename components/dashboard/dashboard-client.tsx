@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { PageTransition } from "@/components/page-transition";
-import { formatLei } from "@/lib/format";
+import { formatPrice } from "@/lib/format";
 
 type ModificationItem = {
   id: string;
@@ -14,22 +14,21 @@ type ModificationItem = {
   categorySlug?: string;
 };
 
-type Configuration = {
+export type DashboardConfig = {
   id: string;
   totalPrice: number;
   createdAt: string;
   modifications: ModificationItem[];
-  car: {
-    brand: string;
-    model: string;
-    year: number;
-  };
+  carBrand: string;
+  carModel: string;
+  carYear: number;
+  carBasePrice: number;
 };
 
 export function DashboardClient({
   initialConfigs,
 }: {
-  initialConfigs: Configuration[];
+  initialConfigs: DashboardConfig[];
 }) {
   const router = useRouter();
   const [configs, setConfigs] = useState(initialConfigs);
@@ -50,13 +49,13 @@ export function DashboardClient({
 
   return (
     <PageTransition>
-      <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
+        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <h1 className="text-2xl font-bold text-white">
+            <h1 className="text-2xl font-bold text-white sm:text-3xl">
               Configurațiile mele
             </h1>
-            <p className="mt-1 text-[#888888]">
+            <p className="mt-1 text-sm text-[#888888]">
               Toate build-urile salvate în contul tău
             </p>
           </div>
@@ -69,19 +68,19 @@ export function DashboardClient({
         </div>
 
         {configs.length === 0 ? (
-          <div className="mt-16 rounded-xl border border-dashed border-[#2a2a2a] bg-[#1a1a1a] p-12 text-center">
+          <div className="mt-12 flex flex-col items-center rounded-xl border border-dashed border-[#2a2a2a] bg-[#1a1a1a] p-10 text-center sm:p-16">
             <p className="text-[#888888]">
               Nu ai încă nicio configurație salvată.
             </p>
             <Link
               href="/configurator"
-              className="mt-4 inline-block text-[#00d4ff] hover:underline"
+              className="mt-4 text-sm text-[#00d4ff] hover:underline"
             >
               Creează prima configurație →
             </Link>
           </div>
         ) : (
-          <div className="mt-8 space-y-4">
+          <div className="mt-8 grid gap-4">
             {configs.map((config, i) => {
               const mods = Array.isArray(config.modifications)
                 ? config.modifications
@@ -92,26 +91,27 @@ export function DashboardClient({
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
-                  className="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-6 card-hover"
+                  className="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-5 card-hover sm:p-6"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <h2 className="text-lg font-semibold text-white">
-                        {config.car.brand} {config.car.model}{" "}
-                        <span className="text-sm font-normal text-[#888888]">
-                          ({config.car.year})
-                        </span>
+                    <div className="min-w-0">
+                      <h2 className="truncate text-lg font-semibold text-white">
+                        {config.carBrand} {config.carModel}
                       </h2>
                       <p className="mt-1 text-xs text-[#888888]">
-                        {new Date(config.createdAt).toLocaleDateString("ro-RO", {
-                          day: "numeric",
-                          month: "long",
-                          year: "numeric",
-                        })}
+                        Anul {config.carYear} ·{" "}
+                        {new Date(config.createdAt).toLocaleDateString(
+                          "ro-RO",
+                          {
+                            day: "numeric",
+                            month: "long",
+                            year: "numeric",
+                          },
+                        )}
                       </p>
                     </div>
-                    <p className="text-xl font-bold text-[#ff4444]">
-                      {formatLei(config.totalPrice)}
+                    <p className="shrink-0 text-xl font-bold text-[#ff4444]">
+                      {formatPrice(config.totalPrice)}
                     </p>
                   </div>
                   {mods.length > 0 && (
@@ -119,7 +119,7 @@ export function DashboardClient({
                       {mods.map((m) => (
                         <li
                           key={m.id}
-                          className="rounded-full border border-[#2a2a2a] bg-[#111111] px-3 py-1 text-xs text-[#888888]"
+                          className="rounded-full border border-[#2a2a2a] bg-[#111111] px-3 py-1 text-xs text-[#cccccc]"
                         >
                           {m.name}
                         </li>
@@ -130,7 +130,7 @@ export function DashboardClient({
                     type="button"
                     onClick={() => handleDelete(config.id)}
                     disabled={deletingId === config.id}
-                    className="mt-4 text-sm text-[#ff4444] transition-colors hover:text-[#ff6666] disabled:opacity-50"
+                    className="mt-4 text-xs text-[#ff4444] transition-colors hover:text-[#ff6666] disabled:opacity-50"
                   >
                     {deletingId === config.id
                       ? "Se șterge..."

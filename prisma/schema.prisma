@@ -22,16 +22,6 @@ model User {
   createdAt DateTime            @default(now())
 }
 
-model Car {
-  id        String              @id @default(cuid())
-  brand     String
-  model     String
-  year      Int
-  basePrice Float
-  imageUrl  String?
-  configs   UserConfiguration[]
-}
-
 model Category {
   id            String         @id @default(cuid())
   name          String
@@ -41,21 +31,27 @@ model Category {
 
 model Modification {
   id          String   @id @default(cuid())
-  name        String
+  name        String   @db.VarChar(191)
   price       Float
-  description String?
-  imageUrl    String?
+  description String?  @db.Text
+  imageUrl    String?  @db.Text
   categoryId  String
-  category    Category @relation(fields: [categoryId], references: [id])
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([categoryId])
 }
 
 model UserConfiguration {
   id            String   @id @default(cuid())
   userId        String
-  carId         String
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  car           Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  carBrand      String   @db.VarChar(80)
+  carModel      String   @db.VarChar(120)
+  carYear       Int
+  carBasePrice  Float
   modifications Json
   totalPrice    Float
   createdAt     DateTime @default(now())
+
+  @@index([userId])
 }

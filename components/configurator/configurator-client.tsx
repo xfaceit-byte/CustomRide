@@ -1,23 +1,20 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PageTransition } from "@/components/page-transition";
 import { PriceCounter } from "@/components/price-counter";
 import { useConfiguratorStore } from "@/store/configurator-store";
-import { formatLei } from "@/lib/format";
+import { formatPrice } from "@/lib/format";
+import { computeCarPrice } from "@/lib/pricing";
 
-type Car = {
-  id: string;
-  brand: string;
-  model: string;
-  year: number;
-  basePrice: number;
-  imageUrl: string | null;
+type Brand = {
+  slug: string;
+  name: string;
+  tier: "premium" | "standard" | "budget";
 };
 
 type Modification = {
@@ -36,46 +33,115 @@ type Category = {
   modifications: Modification[];
 };
 
-const categoryIcons: Record<string, string> = {
-  culori: "🎨",
-  jante: "⭕",
-  spoilere: "🏎️",
-  accesorii: "🔧",
+const tierLabels: Record<Brand["tier"], string> = {
+  premium: "Premium",
+  standard: "Standard",
+  budget: "Accesibil",
 };
 
+const CURRENT_YEAR = new Date().getFullYear();
+const MIN_YEAR = 1990;
+const YEARS = Array.from(
+  { length: CURRENT_YEAR - MIN_YEAR + 1 },
+  (_, i) => CURRENT_YEAR - i,
+);
+
 export function ConfiguratorClient({
-  cars,
+  brands,
   categories,
 }: {
-  cars: Car[];
+  brands: Brand[];
   categories: Category[];
 }) {
   const { data: session } = useSession();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState(categories[0]?.slug ?? "culori");
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
 
   const {
     step,
-    selectedCarId,
-    selectedCarLabel,
+    brandSlug,
+    brandName,
+    model,
+    year,
+    basePrice,
     selectedModifications,
-    selectCar,
+    selectBrand,
+    selectModel,
+    selectYear,
     toggleModification,
-    getTotalPrice,
     setStep,
+    getTotalPrice,
+    reset,
   } = useConfiguratorStore();
+
+  const [brandFilter, setBrandFilter] = useState("");
+  const [modelFilter, setModelFilter] = useState("");
+  const [modelsByBrand, setModelsByBrand] = useState<
+    Record<string, string[]>
+  >({});
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [modelsError, setModelsError] = useState("");
+  const [activeTab, setActiveTab] = useState(categories[0]?.slug ?? "culori");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const fetchControllerRef = useRef<AbortController | null>(null);
 
   const totalPrice = getTotalPrice();
   const activeCategory = categories.find((c) => c.slug === activeTab);
+  const selectedTier = brands.find((b) => b.slug === brandSlug)?.tier;
+  const models = useMemo(
+    () => (brandSlug ? (modelsByBrand[brandSlug] ?? []) : []),
+    [brandSlug, modelsByBrand],
+  );
+
+  async function loadModels(slug: string) {
+    if (modelsByBrand[slug]) return;
+    fetchControllerRef.current?.abort();
+    const controller = new AbortController();
+    fetchControllerRef.current = controller;
+    setLoadingModels(true);
+    setModelsError("");
+    try {
+      const res = await fetch(
+        `/api/cars/models?brand=${encodeURIComponent(slug)}`,
+        { signal: controller.signal },
+      );
+      if (!res.ok) throw new Error("Eroare server");
+      const data: { models: string[] } = await res.json();
+      setModelsByBrand((prev) => ({ ...prev, [slug]: data.models }));
+    } catch (err) {
+      if ((err as Error).name !== "AbortError") {
+        setModelsError("Nu am putut încărca modelele pentru acest brand.");
+      }
+    } finally {
+      if (!controller.signal.aborted) setLoadingModels(false);
+    }
+  }
+
+  function handleSelectBrand(b: Brand) {
+    selectBrand(b.slug, b.name);
+    void loadModels(b.slug);
+  }
+
+  const filteredBrands = useMemo(() => {
+    const q = brandFilter.trim().toLowerCase();
+    if (!q) return brands;
+    return brands.filter((b) => b.name.toLowerCase().includes(q));
+  }, [brands, brandFilter]);
+
+  const filteredModels = useMemo(() => {
+    const q = modelFilter.trim().toLowerCase();
+    if (!q) return models;
+    return models.filter((m) => m.toLowerCase().includes(q));
+  }, [models, modelFilter]);
+
+  const stepLabels = ["Brand", "Model", "An", "Modificări"];
 
   async function handleSave() {
     if (!session) {
       router.push("/login?callbackUrl=/configurator");
       return;
     }
-    if (!selectedCarId) return;
+    if (!brandName || !model || !year) return;
 
     setSaving(true);
     setMessage("");
@@ -84,7 +150,10 @@ export function ConfiguratorClient({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        carId: selectedCarId,
+        carBrand: brandName,
+        carModel: model,
+        carYear: year,
+        carBasePrice: basePrice,
         modifications: Object.values(selectedModifications),
         totalPrice,
       }),
@@ -93,7 +162,7 @@ export function ConfiguratorClient({
     setSaving(false);
 
     if (res.ok) {
-      setMessage("Configurația a fost salvată cu succes!");
+      setMessage("Configurația a fost salvată cu succes.");
       router.push("/dashboard");
     } else {
       const data = await res.json();
@@ -101,137 +170,287 @@ export function ConfiguratorClient({
     }
   }
 
+  function goBack() {
+    if (step === 1) return;
+    setStep((step - 1) as 1 | 2 | 3 | 4);
+  }
+
   return (
     <PageTransition>
-      <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-        <div className="mb-8 flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => (step === 2 ? setStep(1) : null)}
-            className={`text-sm transition-colors duration-300 ${
-              step === 2
-                ? "text-[#888888] hover:text-[#00d4ff]"
-                : "pointer-events-none opacity-40"
-            }`}
-          >
-            ← Înapoi la mașini
-          </button>
-          <div className="flex gap-2 text-sm">
-            <span
-              className={
-                step === 1 ? "text-[#00d4ff]" : "text-[#888888]"
-              }
-            >
-              1. Mașină
-            </span>
-            <span className="text-[#2a2a2a]">/</span>
-            <span
-              className={
-                step === 2 ? "text-[#00d4ff]" : "text-[#888888]"
-              }
-            >
-              2. Modificări
-            </span>
-          </div>
+      <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+        <div className="mx-auto max-w-3xl text-center">
+          <p className="text-xs uppercase tracking-[0.18em] text-[#00d4ff]">
+            Configurator
+          </p>
+          <h1 className="mt-3 text-2xl font-bold text-white sm:text-3xl">
+            Construiește mașina ta
+          </h1>
+          <p className="mt-2 text-sm text-[#888888]">
+            Alege brandul, modelul, anul și adaugă modificările dorite.
+          </p>
         </div>
 
-        <div className="lg:grid lg:grid-cols-[1fr_280px] lg:gap-8">
-          <div>
+        <div className="mx-auto mt-8 flex max-w-3xl items-center justify-between gap-2 sm:gap-4">
+          {stepLabels.map((label, i) => {
+            const n = (i + 1) as 1 | 2 | 3 | 4;
+            const active = step === n;
+            const done = step > n;
+            const reachable =
+              n === 1 ||
+              (n === 2 && brandSlug) ||
+              (n === 3 && model) ||
+              (n === 4 && year);
+            return (
+              <button
+                key={label}
+                type="button"
+                onClick={() => reachable && setStep(n)}
+                disabled={!reachable}
+                className={`flex flex-1 flex-col items-center gap-2 ${
+                  reachable ? "cursor-pointer" : "cursor-not-allowed opacity-50"
+                }`}
+              >
+                <span
+                  className={`flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold transition-all sm:h-9 sm:w-9 ${
+                    active
+                      ? "border-[#00d4ff] bg-[#00d4ff]/15 text-[#00d4ff] shadow-[0_0_16px_rgba(0,212,255,0.35)]"
+                      : done
+                        ? "border-[#00d4ff]/40 bg-[#00d4ff]/10 text-[#00d4ff]"
+                        : "border-[#2a2a2a] bg-[#1a1a1a] text-[#888888]"
+                  }`}
+                >
+                  {n}
+                </span>
+                <span
+                  className={`hidden text-xs sm:block ${
+                    active ? "text-white" : "text-[#888888]"
+                  }`}
+                >
+                  {label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-6 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={goBack}
+            disabled={step === 1}
+            className="text-sm text-[#888888] transition-colors hover:text-[#00d4ff] disabled:pointer-events-none disabled:opacity-40"
+          >
+            ← Înapoi
+          </button>
+          {(brandName || model || year) && (
+            <button
+              type="button"
+              onClick={() => reset()}
+              className="text-xs text-[#888888] transition-colors hover:text-[#ff4444]"
+            >
+              Resetează
+            </button>
+          )}
+        </div>
+
+        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_320px] lg:gap-8">
+          <div className="min-w-0">
             <AnimatePresence mode="wait">
-              {step === 1 ? (
-                <motion.div
-                  key="step1"
-                  initial={{ opacity: 0, x: -16 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 16 }}
-                  transition={{ duration: 0.3 }}
+              {step === 1 && (
+                <motion.section
+                  key="brand"
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -12 }}
+                  transition={{ duration: 0.25 }}
                 >
-                  <h1 className="text-2xl font-bold text-white">
-                    Selectează mașina
-                  </h1>
-                  <p className="mt-2 text-[#888888]">
-                    Alege modelul de bază pentru configurația ta
+                  <SearchInput
+                    value={brandFilter}
+                    onChange={setBrandFilter}
+                    placeholder="Caută brand (BMW, Audi, Toyota...)"
+                  />
+                  <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                    {filteredBrands.map((b) => {
+                      const isSelected = brandSlug === b.slug;
+                      return (
+                        <button
+                          key={b.slug}
+                          type="button"
+                          onClick={() => handleSelectBrand(b)}
+                          className={`flex aspect-square flex-col items-center justify-center rounded-xl border p-4 text-center transition-all duration-300 ${
+                            isSelected
+                              ? "gradient-border border-transparent shadow-[0_0_24px_rgba(0,212,255,0.25)]"
+                              : "border-[#2a2a2a] bg-[#1a1a1a] card-hover"
+                          }`}
+                        >
+                          <span className="text-base font-semibold text-white sm:text-lg">
+                            {b.name}
+                          </span>
+                          <span className="mt-2 rounded-full border border-[#2a2a2a] bg-[#111111] px-2 py-0.5 text-[10px] uppercase tracking-wider text-[#888888]">
+                            {tierLabels[b.tier]}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {filteredBrands.length === 0 && (
+                    <p className="mt-8 text-center text-sm text-[#888888]">
+                      Niciun brand găsit pentru &ldquo;{brandFilter}&rdquo;.
+                    </p>
+                  )}
+                </motion.section>
+              )}
+
+              {step === 2 && (
+                <motion.section
+                  key="model"
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -12 }}
+                  transition={{ duration: 0.25 }}
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <h2 className="text-lg font-semibold text-white">
+                      Modele {brandName}
+                    </h2>
+                    <span className="text-xs text-[#888888]">
+                      {filteredModels.length} disponibile
+                    </span>
+                  </div>
+                  <div className="mt-4">
+                    <SearchInput
+                      value={modelFilter}
+                      onChange={setModelFilter}
+                      placeholder="Caută model..."
+                    />
+                  </div>
+
+                  {loadingModels && (
+                    <div className="mt-10 flex justify-center">
+                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#2a2a2a] border-t-[#00d4ff]" />
+                    </div>
+                  )}
+
+                  {modelsError && (
+                    <p className="mt-6 text-center text-sm text-[#ff4444]">
+                      {modelsError}
+                    </p>
+                  )}
+
+                  {!loadingModels && !modelsError && (
+                    <div className="scroll-area mt-6 grid max-h-[480px] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
+                      {filteredModels.map((m) => {
+                        const isSelected = model === m;
+                        return (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => selectModel(m)}
+                            className={`rounded-lg border px-4 py-3 text-left text-sm transition-all duration-300 ${
+                              isSelected
+                                ? "gradient-border border-transparent text-white"
+                                : "border-[#2a2a2a] bg-[#1a1a1a] text-[#cccccc] hover:border-[#00d4ff]/40 hover:text-white"
+                            }`}
+                          >
+                            {m}
+                          </button>
+                        );
+                      })}
+                      {filteredModels.length === 0 && (
+                        <p className="col-span-full py-10 text-center text-sm text-[#888888]">
+                          Niciun model găsit.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </motion.section>
+              )}
+
+              {step === 3 && (
+                <motion.section
+                  key="year"
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -12 }}
+                  transition={{ duration: 0.25 }}
+                >
+                  <h2 className="text-lg font-semibold text-white">
+                    {brandName} {model}
+                  </h2>
+                  <p className="mt-1 text-sm text-[#888888]">
+                    Alege anul de fabricație. Prețul de bază se ajustează în
+                    funcție de vechime.
                   </p>
-                  <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                    {cars.map((car) => (
-                      <button
-                        key={car.id}
-                        type="button"
-                        onClick={() =>
-                          selectCar(
-                            car.id,
-                            car.basePrice,
-                            `${car.brand} ${car.model}`,
-                          )
-                        }
-                        className={`group overflow-hidden rounded-xl border text-left transition-all duration-300 card-hover ${
-                          selectedCarId === car.id
-                            ? "gradient-border border-transparent"
-                            : "border-[#2a2a2a] bg-[#1a1a1a]"
-                        }`}
-                      >
-                        <div className="relative aspect-[16/10] bg-[#111111]">
-                          {car.imageUrl ? (
-                            <Image
-                              src={car.imageUrl}
-                              alt={`${car.brand} ${car.model}`}
-                              fill
-                              className="object-cover transition-transform duration-300 group-hover:scale-105"
-                              sizes="(max-width: 768px) 100vw, 33vw"
-                            />
-                          ) : (
-                            <div className="flex h-full items-center justify-center text-4xl">
-                              🚗
-                            </div>
+                  <div className="scroll-area mt-6 grid max-h-[420px] grid-cols-3 gap-2 overflow-y-auto pr-1 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-6">
+                    {YEARS.map((y) => {
+                      const isSelected = year === y;
+                      const price =
+                        selectedTier && brandSlug && model
+                          ? computeCarPrice(brandSlug, model, y, selectedTier)
+                          : 0;
+                      return (
+                        <button
+                          key={y}
+                          type="button"
+                          onClick={() => selectYear(y, price)}
+                          className={`flex flex-col items-center rounded-lg border px-3 py-3 transition-all duration-300 ${
+                            isSelected
+                              ? "gradient-border border-transparent shadow-[0_0_18px_rgba(0,212,255,0.25)]"
+                              : "border-[#2a2a2a] bg-[#1a1a1a] hover:border-[#00d4ff]/40"
+                          }`}
+                        >
+                          <span className="font-semibold text-white">{y}</span>
+                          <span className="mt-0.5 text-[10px] text-[#888888]">
+                            {formatPrice(price)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </motion.section>
+              )}
+
+              {step === 4 && (
+                <motion.section
+                  key="mods"
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -12 }}
+                  transition={{ duration: 0.25 }}
+                >
+                  <h2 className="text-lg font-semibold text-white">
+                    Modificări pentru {brandName} {model} {year}
+                  </h2>
+                  <p className="mt-1 text-sm text-[#888888]">
+                    Alege câte o opțiune pentru fiecare categorie.
+                  </p>
+
+                  <div className="mt-6 flex flex-wrap gap-2 border-b border-[#2a2a2a] pb-3">
+                    {categories.map((cat) => {
+                      const isActive = activeTab === cat.slug;
+                      const hasSelection =
+                        !!selectedModifications[cat.slug];
+                      return (
+                        <button
+                          key={cat.slug}
+                          type="button"
+                          onClick={() => setActiveTab(cat.slug)}
+                          className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-all duration-300 ${
+                            isActive
+                              ? "border-[#00d4ff]/40 bg-[#00d4ff]/10 text-[#00d4ff]"
+                              : "border-transparent text-[#888888] hover:text-white"
+                          }`}
+                        >
+                          {cat.name}
+                          {hasSelection && (
+                            <span className="h-1.5 w-1.5 rounded-full bg-[#00d4ff]" />
                           )}
-                        </div>
-                        <div className="p-4">
-                          <p className="text-xs text-[#00d4ff]">{car.brand}</p>
-                          <p className="font-semibold text-white">
-                            {car.model}
-                          </p>
-                          <p className="text-xs text-[#888888]">{car.year}</p>
-                          <p className="mt-2 text-sm font-medium text-[#ff4444]">
-                            de la {formatLei(car.basePrice)}
-                          </p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="step2"
-                  initial={{ opacity: 0, x: 16 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -16 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <h1 className="text-2xl font-bold text-white">
-                    Modificări — {selectedCarLabel}
-                  </h1>
-                  <p className="mt-2 text-[#888888]">
-                    Alege câte o opțiune per categorie (opțional)
-                  </p>
-
-                  <div className="mt-6 flex flex-wrap gap-2 border-b border-[#2a2a2a] pb-4">
-                    {categories.map((cat) => (
-                      <button
-                        key={cat.slug}
-                        type="button"
-                        onClick={() => setActiveTab(cat.slug)}
-                        className={`rounded-lg px-4 py-2 text-sm transition-all duration-300 ${
-                          activeTab === cat.slug
-                            ? "bg-[#00d4ff]/15 text-[#00d4ff] border border-[#00d4ff]/30"
-                            : "text-[#888888] hover:text-white border border-transparent"
-                        }`}
-                      >
-                        {categoryIcons[cat.slug] ?? "•"} {cat.name}
-                      </button>
-                    ))}
+                        </button>
+                      );
+                    })}
                   </div>
 
-                  <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                  <div className="mt-6 grid gap-3 sm:grid-cols-2">
                     {activeCategory?.modifications.map((mod) => {
                       const isSelected =
                         selectedModifications[activeCategory.slug]?.id ===
@@ -255,12 +474,12 @@ export function ConfiguratorClient({
                           }`}
                         >
                           <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="font-medium text-white">
+                            <div className="min-w-0">
+                              <p className="truncate font-medium text-white">
                                 {mod.name}
                               </p>
                               {mod.description && (
-                                <p className="mt-1 text-xs text-[#888888]">
+                                <p className="mt-1 line-clamp-2 text-xs text-[#888888]">
                                   {mod.description}
                                 </p>
                               )}
@@ -274,50 +493,72 @@ export function ConfiguratorClient({
                             >
                               {mod.price === 0
                                 ? "Inclus"
-                                : `+${formatLei(mod.price)}`}
+                                : `+${formatPrice(mod.price)}`}
                             </p>
                           </div>
                         </button>
                       );
                     })}
                   </div>
-                </motion.div>
+                </motion.section>
               )}
             </AnimatePresence>
           </div>
 
-          <aside className="mt-8 lg:mt-0">
-            <div className="sticky top-24 rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-6">
-              <p className="text-sm text-[#888888]">Preț total estimat</p>
-              <p className="mt-2 text-3xl font-bold text-white">
+          <aside>
+            <div className="sticky top-24 rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-5 sm:p-6">
+              <p className="text-xs uppercase tracking-wider text-[#888888]">
+                Preț total estimat
+              </p>
+              <p className="mt-2 text-3xl font-bold text-white sm:text-4xl">
                 <PriceCounter value={totalPrice} />
               </p>
-              {selectedCarLabel && (
-                <p className="mt-2 text-xs text-[#888888]">
-                  {selectedCarLabel}
-                </p>
-              )}
+
+              <div className="mt-5 space-y-3 border-t border-[#2a2a2a] pt-4 text-sm">
+                <Row
+                  label="Brand"
+                  value={brandName ?? "Neselectat"}
+                  muted={!brandName}
+                />
+                <Row
+                  label="Model"
+                  value={model ?? "Neselectat"}
+                  muted={!model}
+                />
+                <Row
+                  label="An"
+                  value={year ? String(year) : "Neselectat"}
+                  muted={!year}
+                />
+                <Row
+                  label="Preț bază"
+                  value={basePrice ? formatPrice(basePrice) : "—"}
+                  muted={!basePrice}
+                />
+              </div>
+
               {Object.values(selectedModifications).length > 0 && (
-                <ul className="mt-4 space-y-1 border-t border-[#2a2a2a] pt-4">
+                <ul className="mt-4 space-y-1.5 border-t border-[#2a2a2a] pt-4 text-xs">
                   {Object.values(selectedModifications).map((m) => (
                     <li
                       key={m.id}
-                      className="flex justify-between text-xs text-[#888888]"
+                      className="flex justify-between gap-3 text-[#cccccc]"
                     >
-                      <span>{m.name}</span>
-                      <span className="text-[#ff4444]">
-                        +{formatLei(m.price)}
+                      <span className="truncate">{m.name}</span>
+                      <span className="shrink-0 text-[#ff4444]">
+                        +{formatPrice(m.price)}
                       </span>
                     </li>
                   ))}
                 </ul>
               )}
-              {step === 2 && (
+
+              {step === 4 && (
                 <>
                   <button
                     type="button"
                     onClick={handleSave}
-                    disabled={saving || !selectedCarId}
+                    disabled={saving || !year}
                     className="mt-6 w-full rounded-lg bg-[#00d4ff] py-3 text-sm font-semibold text-[#0a0a0a] transition-all duration-300 hover:shadow-[0_0_24px_rgba(0,212,255,0.4)] disabled:opacity-50"
                   >
                     {saving
@@ -327,7 +568,7 @@ export function ConfiguratorClient({
                         : "Autentifică-te pentru salvare"}
                   </button>
                   {!session && (
-                    <p className="mt-2 text-center text-xs text-[#888888]">
+                    <p className="mt-3 text-center text-xs text-[#888888]">
                       <Link
                         href="/register"
                         className="text-[#00d4ff] hover:underline"
@@ -339,12 +580,12 @@ export function ConfiguratorClient({
                         href="/login?callbackUrl=/configurator"
                         className="text-[#00d4ff] hover:underline"
                       >
-                        autentifică-te
+                        intră în cont
                       </Link>
                     </p>
                   )}
                   {message && (
-                    <p className="mt-2 text-center text-xs text-[#00d4ff]">
+                    <p className="mt-3 text-center text-xs text-[#00d4ff]">
                       {message}
                     </p>
                   )}
@@ -355,5 +596,59 @@ export function ConfiguratorClient({
         </div>
       </div>
     </PageTransition>
+  );
+}
+
+function Row({
+  label,
+  value,
+  muted,
+}: {
+  label: string;
+  value: string;
+  muted?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-xs uppercase tracking-wider text-[#888888]">
+        {label}
+      </span>
+      <span
+        className={`truncate text-sm ${muted ? "text-[#666666]" : "text-white"}`}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function SearchInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-4 py-2.5 text-sm text-white placeholder:text-[#666666] transition-all duration-300"
+      />
+      {value && (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#888888] hover:text-white"
+        >
+          Anulează
+        </button>
+      )}
+    </div>
   );
 }

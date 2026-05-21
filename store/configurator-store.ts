@@ -7,37 +7,61 @@ export type SelectedModification = {
   categorySlug: string;
 };
 
+export type ConfigStep = 1 | 2 | 3 | 4;
+
 type ConfiguratorState = {
-  step: 1 | 2;
-  selectedCarId: string | null;
-  selectedCarBasePrice: number;
-  selectedCarLabel: string;
+  step: ConfigStep;
+  brandSlug: string | null;
+  brandName: string | null;
+  model: string | null;
+  year: number | null;
+  basePrice: number;
   selectedModifications: Record<string, SelectedModification>;
-  setStep: (step: 1 | 2) => void;
-  selectCar: (id: string, basePrice: number, label: string) => void;
+  setStep: (step: ConfigStep) => void;
+  selectBrand: (slug: string, name: string) => void;
+  selectModel: (model: string) => void;
+  selectYear: (year: number, basePrice: number) => void;
   toggleModification: (mod: SelectedModification) => void;
   getTotalPrice: () => number;
   reset: () => void;
 };
 
 const initialState = {
-  step: 1 as const,
-  selectedCarId: null,
-  selectedCarBasePrice: 0,
-  selectedCarLabel: "",
+  step: 1 as ConfigStep,
+  brandSlug: null,
+  brandName: null,
+  model: null,
+  year: null,
+  basePrice: 0,
   selectedModifications: {},
 };
 
 export const useConfiguratorStore = create<ConfiguratorState>((set, get) => ({
   ...initialState,
   setStep: (step) => set({ step }),
-  selectCar: (id, basePrice, label) =>
+  selectBrand: (slug, name) =>
     set({
-      selectedCarId: id,
-      selectedCarBasePrice: basePrice,
-      selectedCarLabel: label,
-      step: 2,
+      brandSlug: slug,
+      brandName: name,
+      model: null,
+      year: null,
+      basePrice: 0,
       selectedModifications: {},
+      step: 2,
+    }),
+  selectModel: (model) =>
+    set({
+      model,
+      year: null,
+      basePrice: 0,
+      selectedModifications: {},
+      step: 3,
+    }),
+  selectYear: (year, basePrice) =>
+    set({
+      year,
+      basePrice,
+      step: 4,
     }),
   toggleModification: (mod) =>
     set((state) => {
@@ -50,12 +74,12 @@ export const useConfiguratorStore = create<ConfiguratorState>((set, get) => ({
       return { selectedModifications: next };
     }),
   getTotalPrice: () => {
-    const { selectedCarBasePrice, selectedModifications } = get();
+    const { basePrice, selectedModifications } = get();
     const modsTotal = Object.values(selectedModifications).reduce(
       (sum, m) => sum + m.price,
       0,
     );
-    return selectedCarBasePrice + modsTotal;
+    return basePrice + modsTotal;
   },
   reset: () => set(initialState),
 }));

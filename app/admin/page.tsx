@@ -17,25 +17,20 @@ export default async function AdminPage() {
     redirect("/");
   }
 
-  const [cars, modifications, categories, configurations] = await Promise.all([
-    prisma.car.findMany({ orderBy: { brand: "asc" } }),
+  const [modifications, categories, configurations] = await Promise.all([
     prisma.modification.findMany({
       include: { category: true },
       orderBy: { name: "asc" },
     }),
     prisma.category.findMany({ orderBy: { name: "asc" } }),
     prisma.userConfiguration.findMany({
-      include: {
-        car: true,
-        user: { select: { name: true, email: true } },
-      },
+      include: { user: { select: { name: true, email: true } } },
       orderBy: { createdAt: "desc" },
     }),
   ]);
 
   return (
     <AdminPanel
-      initialCars={cars}
       initialModifications={modifications}
       initialCategories={categories}
       initialConfigurations={configurations.map((c) => ({
@@ -43,7 +38,9 @@ export default async function AdminPage() {
         totalPrice: c.totalPrice,
         createdAt: c.createdAt.toISOString(),
         modifications: c.modifications,
-        car: c.car,
+        carBrand: c.carBrand,
+        carModel: c.carModel,
+        carYear: c.carYear,
         user: c.user,
       }))}
     />

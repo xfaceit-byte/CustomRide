@@ -2,12 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, useSpring, useTransform } from "framer-motion";
-import { formatLei } from "@/lib/format";
+import { formatPrice } from "@/lib/format";
 
 export function PriceCounter({ value }: { value: number }) {
   const spring = useSpring(value, { stiffness: 100, damping: 20 });
-  const display = useTransform(spring, (v) => formatLei(Math.round(v)));
-  const [text, setText] = useState(formatLei(value));
+  const display = useTransform(spring, (v) => formatPrice(Math.round(v)));
+  const [text, setText] = useState(formatPrice(value));
   const ref = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
