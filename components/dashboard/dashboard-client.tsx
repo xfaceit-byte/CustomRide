@@ -126,16 +126,24 @@ export function DashboardClient({
                       ))}
                     </ul>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(config.id)}
-                    disabled={deletingId === config.id}
-                    className="mt-4 text-xs text-[#ff4444] transition-colors hover:text-[#ff6666] disabled:opacity-50"
-                  >
-                    {deletingId === config.id
-                      ? "Se șterge..."
-                      : "Șterge configurația"}
-                  </button>
+                  <div className="mt-4 flex flex-wrap items-center gap-4">
+                    <Link
+                      href={`/configurator?edit=${config.id}`}
+                      className="text-xs font-medium text-[#00d4ff] transition-colors hover:underline"
+                    >
+                      Editează configurația
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(config.id)}
+                      disabled={deletingId === config.id}
+                      className="text-xs text-[#ff4444] transition-colors hover:text-[#ff6666] disabled:opacity-50"
+                    >
+                      {deletingId === config.id
+                        ? "Se șterge..."
+                        : "Șterge configurația"}
+                    </button>
+                  </div>
                 </motion.article>
               );
             })}

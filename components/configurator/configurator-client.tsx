@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PageTransition } from "@/components/page-transition";
 import { PriceCounter } from "@/components/price-counter";
@@ -33,6 +33,21 @@ type Category = {
   modifications: Modification[];
 };
 
+export type InitialConfig = {
+  id: string;
+  brandSlug: string;
+  brandName: string;
+  model: string;
+  year: number;
+  basePrice: number;
+  modifications: Array<{
+    id: string;
+    name: string;
+    price: number;
+    categorySlug?: string;
+  }>;
+};
+
 const tierLabels: Record<Brand["tier"], string> = {
   premium: "Premium",
   standard: "Standard",
@@ -49,9 +64,11 @@ const YEARS = Array.from(
 export function ConfiguratorClient({
   brands,
   categories,
+  initialConfig,
 }: {
   brands: Brand[];
   categories: Category[];
+  initialConfig?: InitialConfig | null;
 }) {
   const { data: session } = useSession();
   const router = useRouter();
@@ -71,8 +88,12 @@ export function ConfiguratorClient({
     setStep,
     getTotalPrice,
     reset,
+    loadFromConfiguration,
   } = useConfiguratorStore();
 
+  const [editId, setEditId] = useState<string | null>(
+    initialConfig?.id ?? null,
+  );
   const [brandFilter, setBrandFilter] = useState("");
   const [modelFilter, setModelFilter] = useState("");
   const [modelsByBrand, setModelsByBrand] = useState<
@@ -84,6 +105,7 @@ export function ConfiguratorClient({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const fetchControllerRef = useRef<AbortController | null>(null);
+  const hasInitializedRef = useRef(false);
 
   const totalPrice = getTotalPrice();
   const activeCategory = categories.find((c) => c.slug === activeTab);
@@ -93,34 +115,60 @@ export function ConfiguratorClient({
     [brandSlug, modelsByBrand],
   );
 
-  async function loadModels(slug: string) {
-    if (modelsByBrand[slug]) return;
-    fetchControllerRef.current?.abort();
-    const controller = new AbortController();
-    fetchControllerRef.current = controller;
-    setLoadingModels(true);
-    setModelsError("");
-    try {
-      const res = await fetch(
-        `/api/cars/models?brand=${encodeURIComponent(slug)}`,
-        { signal: controller.signal },
-      );
-      if (!res.ok) throw new Error("Eroare server");
-      const data: { models: string[] } = await res.json();
-      setModelsByBrand((prev) => ({ ...prev, [slug]: data.models }));
-    } catch (err) {
-      if ((err as Error).name !== "AbortError") {
-        setModelsError("Nu am putut încărca modelele pentru acest brand.");
+  const loadModels = useCallback(
+    async (slug: string) => {
+      if (modelsByBrand[slug]) return;
+      fetchControllerRef.current?.abort();
+      const controller = new AbortController();
+      fetchControllerRef.current = controller;
+      setLoadingModels(true);
+      setModelsError("");
+      try {
+        const res = await fetch(
+          `/api/cars/models?brand=${encodeURIComponent(slug)}`,
+          { signal: controller.signal },
+        );
+        if (!res.ok) throw new Error("Eroare server");
+        const data: { models: string[] } = await res.json();
+        setModelsByBrand((prev) => ({ ...prev, [slug]: data.models }));
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") {
+          setModelsError("Nu am putut încărca modelele pentru acest brand.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoadingModels(false);
       }
-    } finally {
-      if (!controller.signal.aborted) setLoadingModels(false);
-    }
-  }
+    },
+    [modelsByBrand],
+  );
 
   function handleSelectBrand(b: Brand) {
     selectBrand(b.slug, b.name);
     void loadModels(b.slug);
   }
+
+  useEffect(() => {
+    if (hasInitializedRef.current || !initialConfig) return;
+    hasInitializedRef.current = true;
+    loadFromConfiguration({
+      brandSlug: initialConfig.brandSlug,
+      brandName: initialConfig.brandName,
+      model: initialConfig.model,
+      year: initialConfig.year,
+      basePrice: initialConfig.basePrice,
+      modifications: initialConfig.modifications
+        .filter((m): m is typeof m & { categorySlug: string } =>
+          Boolean(m.categorySlug),
+        )
+        .map((m) => ({
+          id: m.id,
+          name: m.name,
+          price: m.price,
+          categorySlug: m.categorySlug,
+        })),
+    });
+    void loadModels(initialConfig.brandSlug);
+  }, [initialConfig, loadFromConfiguration, loadModels]);
 
   const filteredBrands = useMemo(() => {
     const q = brandFilter.trim().toLowerCase();
@@ -146,8 +194,13 @@ export function ConfiguratorClient({
     setSaving(true);
     setMessage("");
 
-    const res = await fetch("/api/configurations", {
-      method: "POST",
+    const url = editId
+      ? `/api/configurations/${editId}`
+      : "/api/configurations";
+    const method = editId ? "PUT" : "POST";
+
+    const res = await fetch(url, {
+      method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         carBrand: brandName,
@@ -162,12 +215,24 @@ export function ConfiguratorClient({
     setSaving(false);
 
     if (res.ok) {
-      setMessage("Configurația a fost salvată cu succes.");
+      setMessage(
+        editId
+          ? "Configurația a fost actualizată."
+          : "Configurația a fost salvată cu succes.",
+      );
       router.push("/dashboard");
+      router.refresh();
     } else {
       const data = await res.json();
       setMessage(data.error ?? "Eroare la salvare.");
     }
+  }
+
+  function handleReset() {
+    setEditId(null);
+    hasInitializedRef.current = true;
+    reset();
+    router.replace("/configurator");
   }
 
   function goBack() {
@@ -180,13 +245,15 @@ export function ConfiguratorClient({
       <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
         <div className="mx-auto max-w-3xl text-center">
           <p className="text-xs uppercase tracking-[0.18em] text-[#00d4ff]">
-            Configurator
+            {editId ? "Editare configurație" : "Configurator"}
           </p>
           <h1 className="mt-3 text-2xl font-bold text-white sm:text-3xl">
-            Construiește mașina ta
+            {editId ? "Modifică build-ul tău" : "Construiește mașina ta"}
           </h1>
           <p className="mt-2 text-sm text-[#888888]">
-            Alege brandul, modelul, anul și adaugă modificările dorite.
+            {editId
+              ? "Schimbă orice opțiune și salvează din nou."
+              : "Alege brandul, modelul, anul și adaugă modificările dorite."}
           </p>
         </div>
 
@@ -245,10 +312,10 @@ export function ConfiguratorClient({
           {(brandName || model || year) && (
             <button
               type="button"
-              onClick={() => reset()}
+              onClick={handleReset}
               className="text-xs text-[#888888] transition-colors hover:text-[#ff4444]"
             >
-              Resetează
+              {editId ? "Renunță la editare" : "Resetează"}
             </button>
           )}
         </div>
@@ -563,9 +630,11 @@ export function ConfiguratorClient({
                   >
                     {saving
                       ? "Se salvează..."
-                      : session
-                        ? "Salvează configurația"
-                        : "Autentifică-te pentru salvare"}
+                      : !session
+                        ? "Autentifică-te pentru salvare"
+                        : editId
+                          ? "Salvează modificările"
+                          : "Salvează configurația"}
                   </button>
                   {!session && (
                     <p className="mt-3 text-center text-xs text-[#888888]">

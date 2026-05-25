@@ -9,6 +9,15 @@ export type SelectedModification = {
 
 export type ConfigStep = 1 | 2 | 3 | 4;
 
+type LoadPayload = {
+  brandSlug: string;
+  brandName: string;
+  model: string;
+  year: number;
+  basePrice: number;
+  modifications: SelectedModification[];
+};
+
 type ConfiguratorState = {
   step: ConfigStep;
   brandSlug: string | null;
@@ -22,6 +31,7 @@ type ConfiguratorState = {
   selectModel: (model: string) => void;
   selectYear: (year: number, basePrice: number) => void;
   toggleModification: (mod: SelectedModification) => void;
+  loadFromConfiguration: (payload: LoadPayload) => void;
   getTotalPrice: () => number;
   reset: () => void;
 };
@@ -73,6 +83,21 @@ export const useConfiguratorStore = create<ConfiguratorState>((set, get) => ({
       }
       return { selectedModifications: next };
     }),
+  loadFromConfiguration: (payload) => {
+    const byCategory: Record<string, SelectedModification> = {};
+    for (const m of payload.modifications) {
+      if (m.categorySlug) byCategory[m.categorySlug] = m;
+    }
+    set({
+      brandSlug: payload.brandSlug,
+      brandName: payload.brandName,
+      model: payload.model,
+      year: payload.year,
+      basePrice: payload.basePrice,
+      selectedModifications: byCategory,
+      step: 4,
+    });
+  },
   getTotalPrice: () => {
     const { basePrice, selectedModifications } = get();
     const modsTotal = Object.values(selectedModifications).reduce(

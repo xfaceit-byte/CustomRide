@@ -53,16 +53,8 @@ export default function HomePage() {
       <section className="hero-grain relative overflow-hidden border-b border-[#2a2a2a] bg-gradient-to-b from-[#111111] to-[#0a0a0a]">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(0,212,255,0.08),transparent_60%)]" />
         <div className="relative mx-auto flex max-w-6xl flex-col items-center px-4 py-20 text-center sm:px-6 sm:py-28 lg:py-36">
-          <motion.span
-            className="rounded-full border border-[#2a2a2a] bg-[#1a1a1a]/60 px-4 py-1.5 text-xs uppercase tracking-[0.18em] text-[#888888]"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-          >
-            Configurator auto
-          </motion.span>
           <motion.h1
-            className="mt-6 max-w-3xl text-balance text-4xl font-bold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl"
+            className="max-w-3xl text-balance text-4xl font-bold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl"
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.05 }}
